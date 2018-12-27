@@ -25,12 +25,15 @@
 
 //#include "esp_common.h"
 //#include "dmsg.h"
+#include <rom/gpio.h>
+#include <soc/io_mux_reg.h>
 #include "i2c.h"
 #include "fonts.h"
 #include "stddef.h"
 #include "ssd1306.h"
 #include "stdlib.h"
 #include "string.h"
+#include "../../arduino-esp32/cores/esp32/esp32-hal.h"
 
 
 /**
@@ -38,18 +41,19 @@
  * @{
  */
 
+
 //! @brief Panel 0 type, define to SSD1306_NONE if not used.
-#define PANEL0_TYPE SSD1306_128x32
+#define PANEL0_TYPE SSD1306_128x64
 //! @brief I2C address for panel 0
-#define PANEL0_ADDR (0x3c<<1)
+#define PANEL0_ADDR (0x3c << 1)
 //! @brief If panel 0 has external RESET pin, define this as 1
 #define PANEL0_USE_RST 0
 //! @brief GPIO MUX for panel 0 RESET pin
 #define PANEL0_RST_MUX  PERIPHS_IO_MUX_MTDI_U
 //! @brief GPIO FUNC for panel 0 RESET pin
-#define PANEL0_RST_FUNC FUNC_GPIO12
+#define PANEL0_RST_FUNC 16
 //! @brief GPIO bit location for panel 0 RESET pin
-#define PANEL0_RST_BIT  BIT12
+#define PANEL0_RST_BIT  BIT16
 
 //! @brief Panel 1 type, define to SSD1306_NONE if not used.
 #define PANEL1_PANEL_TYPE SSD1306_128x64
@@ -131,7 +135,7 @@ bool ssd1306_init(uint8_t id,uint8_t scl_pin, uint8_t sda_pin)
 //    memset(&ctx,0,sizeof(oled_i2c_ctx));
     if (ctx == NULL)
     {
-//        dmsg_err_puts("Alloc OLED context failed.");
+        ESP_LOGE(__func__,"Alloc OLED context failed.");
         goto oled_init_fail;
     }
     if (id == 0)
@@ -153,7 +157,7 @@ bool ssd1306_init(uint8_t id,uint8_t scl_pin, uint8_t sda_pin)
   #endif
         if (ctx->buffer == NULL)
         {
-//            dmsg_err_puts("Alloc OLED buffer failed.");
+            ESP_LOGE(__func__,"Alloc OLED buffer failed.");
             goto oled_init_fail;
         }
         ctx->address = PANEL0_ADDR;
@@ -162,7 +166,7 @@ bool ssd1306_init(uint8_t id,uint8_t scl_pin, uint8_t sda_pin)
         PIN_FUNC_SELECT(PANEL0_RST_MUX, PANEL0_RST_FUNC);
         GPIO_REG_WRITE(GPIO_ENABLE_ADDRESS, GPIO_REG_READ(GPIO_ENABLE_ADDRESS) | PANEL0_RST_BIT);
         GPIO_REG_WRITE(GPIO_OUT_W1TC_ADDRESS, PANEL0_RST_BIT);
-        os_delay_us(10000);
+        delay(10);
         GPIO_REG_WRITE(GPIO_OUT_W1TS_ADDRESS, PANEL0_RST_BIT);
   #endif
 #else
@@ -213,7 +217,7 @@ bool ssd1306_init(uint8_t id,uint8_t scl_pin, uint8_t sda_pin)
     if (!i2c_write(ctx->address))
     {
         i2c_stop();
-//        dmsg_err_puts("OLED I2C bus not responding.");
+        ESP_LOGE(__func__,"OLED I2C bus not responding.");
         goto oled_init_fail;
     }
     i2c_stop();
