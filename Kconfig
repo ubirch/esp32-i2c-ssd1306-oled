@@ -1,0 +1,47 @@
+menu OLED
+
+
+config OLED_ENABLED
+    bool "OLED Display"
+    help
+        Select this option to enable the OLED display show the submenu with Bluetooth configuration choices.
+
+choice OLED_TYPE
+    prompt "choose between different Board types"
+    depends on OLED_ENABLED
+    help
+        Specify the OLED Type.
+
+config WEMOS_OLED
+    bool "Wemos Lolin32 OLED module 128 x 64"
+
+config OTHER_OLED
+    bool "other Board"
+
+endchoice
+
+config OLED_SDA
+    int "SDA Pin" if OTHER_OLED
+    default 21
+
+config OLED_SCL
+    int "SCL Pin" if OTHER_OLED
+    default 22
+
+config OLED_RST
+    int "RST Pin" if OTHER_OLED
+    default 16
+
+choice OLED_SIZE
+    prompt "size of OLED display"
+    depends on OTHER_OLED
+
+config OLED_128_32
+    bool "SSD1306_128x32"
+
+config OLED_128_64
+    bool "SSD1306_128x64"
+
+endchoice
+
+endmenu

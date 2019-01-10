@@ -27,6 +27,20 @@
 #define SSD1306_H
 #include "stdbool.h"
 
+#if CONFIG_OLED_ENABLED
+
+// I2C OLED Display works with SSD1306 driver
+#if CONFIG_WEMOS_OLED
+#define OLED_SDA 5
+#define OLED_SCL 4
+#define OLED_RST 16
+#else
+#define OLED_SDA CONFIG_OLED_SDA
+#define OLED_SCL CONFIG_OLED_SCL
+#define OLED_RST CONFIG_OLED_RST
+#endif // CONFIG_WEMOS_OLED
+#endif // CONFIG_OLED_ENABLED
+
 
 
 //! @brief Drawing color
