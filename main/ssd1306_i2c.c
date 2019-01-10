@@ -67,25 +67,22 @@
 
 //! specific definitions for different display configurations
 #if CONFIG_OLED_ENABLED
-
+#if defined (PANEL0_TYPE)
+#undef PANEL0_TYPE
 #if CONFIG_WEMOS_OLED
-#if defined (PANEL0_TYPE)
-#undef PANEL0_TYPE
 #define PANEL0_TYPE SSD1306_128x64
-#endif // defined (PANEL0_TYPE)
 // CONFIG_WEMOS_OLED
+#elif CONFIG_HUZZAH_FEATHER_OLED
+#define PANEL0_TYPE SSD1306_128x32
 #else
-#if defined (PANEL0_TYPE)
-#undef PANEL0_TYPE
 #if CONFIG_OLED_128_64
 #define PANEL0_TYPE SSD1306_128x64
 #elif CONFIG_OLED_128_32
 #define PANEL0_TYPE SSD1306_128x32
 #else // CONFIG_OLED_128_64
 #endif // CONFIG_OLED_128_64
-#endif // defined (PANEL0_TYPE)
-
 #endif // CONFIG_WEMOS_OLED
+#endif // defined (PANEL0_TYPE)
 #endif // CONFIG_OLED_ENABLED
 /** @} */
 

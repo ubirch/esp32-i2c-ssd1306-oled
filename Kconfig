@@ -1,6 +1,5 @@
 menu OLED
 
-
 config OLED_ENABLED
     bool "OLED Display"
     help
@@ -14,6 +13,9 @@ choice OLED_TYPE
 
 config WEMOS_OLED
     bool "Wemos Lolin32 OLED module 128 x 64"
+
+config HUZZAH_FEATHER_OLED
+    bool "Huzzah Feather OLED module 128 x 32"
 
 config OTHER_OLED
     bool "other Board"
