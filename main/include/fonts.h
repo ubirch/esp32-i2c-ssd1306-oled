@@ -45,7 +45,7 @@ typedef struct _font_info
 } font_info_t;
 
 
-#define NUM_FONTS 2    //!< Number of built-in fonts
+#define NUM_FONTS 19    //!< Number of built-in fonts
 
 extern const font_info_t * fonts[NUM_FONTS];  //!< Built-in fonts
 
