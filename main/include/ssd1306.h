@@ -28,21 +28,24 @@
 #include "stdbool.h"
 
 #if CONFIG_OLED_ENABLED
-
-// I2C OLED Display works with SSD1306 driver
-#if CONFIG_WEMOS_OLED
-#define OLED_SDA 5
-#define OLED_SCL 4
-#define OLED_RST 16
-#elif CONFIG_HUZZAH_FEATHER_OLED
-#define OLED_SDA 23
-#define OLED_SCL 22
-#define OLED_RST 16
-#else
-#define OLED_SDA CONFIG_OLED_SDA
-#define OLED_SCL CONFIG_OLED_SCL
-#define OLED_RST CONFIG_OLED_RST
-#endif // CONFIG_WEMOS_OLED
+    // I2C OLED Display works with SSD1306 driver
+    #if CONFIG_WEMOS_OLED
+        #define OLED_SDA 5
+        #define OLED_SCL 4
+        #define OLED_RST 16
+    #elif CONFIG_HUZZAH_FEATHER_OLED
+        #define OLED_SDA 23
+        #define OLED_SCL 22
+        #define OLED_RST 16
+    #elif CONFIG_HELTEC_OLED
+        #define OLED_SDA 4
+        #define OLED_SCL 15
+        #define OLED_RST 16
+    #else
+        #define OLED_SDA CONFIG_OLED_SDA
+        #define OLED_SCL CONFIG_OLED_SCL
+        #define OLED_RST CONFIG_OLED_RST
+    #endif // CONFIG_WEMOS_OLED
 #endif // CONFIG_OLED_ENABLED
 
 

@@ -17,6 +17,9 @@ config WEMOS_OLED
 config HUZZAH_FEATHER_OLED
     bool "Huzzah Feather OLED module 128 x 32"
 
+config HELTEC_OLED
+    bool "Heltec WIFI_KIT_32 OLED module 128 x 64"
+
 config OTHER_OLED
     bool "other Board"
 

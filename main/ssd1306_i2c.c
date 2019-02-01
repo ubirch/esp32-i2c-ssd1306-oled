@@ -23,8 +23,8 @@
   */
 
 
-//#include "esp_common.h"
-//#include "dmsg.h"
+#include <driver/i2c.h>
+#include <esp_log.h>
 #include "i2c.h"
 #include "fonts.h"
 #include "stddef.h"
@@ -43,46 +43,28 @@
 #define PANEL0_TYPE SSD1306_128x32
 //! @brief I2C address for panel 0
 #define PANEL0_ADDR (0x3c<<1)
-//! @brief If panel 0 has external RESET pin, define this as 1
-#define PANEL0_USE_RST 0
-//! @brief GPIO MUX for panel 0 RESET pin
-#define PANEL0_RST_MUX  PERIPHS_IO_MUX_MTDI_U
-//! @brief GPIO FUNC for panel 0 RESET pin
-#define PANEL0_RST_FUNC FUNC_GPIO12
-//! @brief GPIO bit location for panel 0 RESET pin
-#define PANEL0_RST_BIT  BIT12
 
-//! @brief Panel 1 type, define to SSD1306_NONE if not used.
-#define PANEL1_PANEL_TYPE SSD1306_128x64
-//! @brief I2C address for panel 1
-#define PANEL1_ADDR (0x3d << 1)
-//! @brief If panel 1 has external RESET pin, define this as 1
-#define PANEL1_USE_RST 0
-//! @brief GPIO MUX for panel 1 RESET pin
-#define PANEL1_RST_MUX  PERIPHS_IO_MUX_MTMS_U
-//! @brief GPIO FUNC for panel 1 RESET pin
-#define PANEL1_RST_FUNC FUNC_GPIO14
-//! @brief GPIO bit location for panel 1 RESET pin
-#define PANEL1_RST_BIT  BIT14
 
 //! specific definitions for different display configurations
 #if CONFIG_OLED_ENABLED
-#if defined (PANEL0_TYPE)
-#undef PANEL0_TYPE
-#if CONFIG_WEMOS_OLED
-#define PANEL0_TYPE SSD1306_128x64
-// CONFIG_WEMOS_OLED
-#elif CONFIG_HUZZAH_FEATHER_OLED
-#define PANEL0_TYPE SSD1306_128x32
-#else
-#if CONFIG_OLED_128_64
-#define PANEL0_TYPE SSD1306_128x64
-#elif CONFIG_OLED_128_32
-#define PANEL0_TYPE SSD1306_128x32
-#else // CONFIG_OLED_128_64
-#endif // CONFIG_OLED_128_64
-#endif // CONFIG_WEMOS_OLED
-#endif // defined (PANEL0_TYPE)
+    #if defined (PANEL0_TYPE)
+        #undef PANEL0_TYPE
+        #if CONFIG_WEMOS_OLED
+            #define PANEL0_TYPE SSD1306_128x64
+            // CONFIG_WEMOS_OLED
+        #elif CONFIG_HUZZAH_FEATHER_OLED
+            #define PANEL0_TYPE SSD1306_128x32
+        #elif CONFIG_HELTEC_OLED
+            #define PANEL0_TYPE SSD1306_128x64
+        #else
+            #if CONFIG_OLED_128_64
+                #define PANEL0_TYPE SSD1306_128x64
+            #elif CONFIG_OLED_128_32
+                #define PANEL0_TYPE SSD1306_128x32
+            #else // CONFIG_OLED_128_64
+            #endif // CONFIG_OLED_128_64
+        #endif // CONFIG_WEMOS_OLED
+    #endif // defined (PANEL0_TYPE)
 #endif // CONFIG_OLED_ENABLED
 /** @} */
 
@@ -94,19 +76,24 @@
 
 void _command(uint8_t adress, uint8_t c)
 {
+    ESP_LOGD(__func__,"%02x",c);
     bool ret;
-    i2c_start();
-    ret = i2c_write(adress);
-    if (!ret) // NACK
-        i2c_stop();
-    i2c_write(0x00);    // Co = 0, D/C = 0
-    i2c_write(c);
-    i2c_stop();
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, adress, true);
+//    ret = i2c_write(adress);
+//    if (!ret) // NACK
+//        i2c_stop();
+    i2c_master_write_byte(cmd,0x00, true);    // Co = 0, D/C = 0
+    i2c_master_write_byte(cmd, c, true);
+    i2c_master_stop(cmd);
+    i2c_master_cmd_begin(I2C_NUM_0, cmd, 100/portTICK_PERIOD_MS);
+    i2c_cmd_link_delete(cmd);
 }
 
 
 void _data(uint8_t adress, uint8_t d)
-{
+{ // todo make this work with ESP-IDF i2c driver
     bool ret;
     i2c_start();
     ret = i2c_write(adress);
@@ -135,11 +122,28 @@ typedef struct _oled_i2c_ctx
 
 oled_i2c_ctx *_ctxs[2] = { NULL };
 
+void i2c_master_init(uint8_t scl_pin, uint8_t sda_pin)
+{
+    i2c_config_t i2c_config = {
+            .mode = I2C_MODE_MASTER,
+            .sda_io_num = sda_pin,
+            .scl_io_num = scl_pin,
+            .sda_pullup_en = GPIO_PULLUP_ENABLE,
+            .scl_pullup_en = GPIO_PULLUP_ENABLE,
+            .master.clk_speed = 40000
+    };
+    i2c_param_config(I2C_NUM_0, &i2c_config);
+    i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
+}
 
 bool ssd1306_init(uint8_t id,uint8_t scl_pin, uint8_t sda_pin)
 {
-	i2c_init(scl_pin,sda_pin);
-    oled_i2c_ctx *ctx = NULL;
+    ESP_LOGD(__func__,"");
+
+	//i2c_init(scl_pin,sda_pin);
+    i2c_master_init(scl_pin, sda_pin);
+	oled_i2c_ctx *ctx = NULL;
+    i2c_cmd_handle_t cmd = NULL;
 
     if ((id != 0) && (id != 1))
         goto oled_init_fail;
@@ -148,10 +152,9 @@ bool ssd1306_init(uint8_t id,uint8_t scl_pin, uint8_t sda_pin)
     ssd1306_term(id);
 
     ctx = malloc(sizeof(oled_i2c_ctx));
-//    memset(&ctx,0,sizeof(oled_i2c_ctx));
     if (ctx == NULL)
     {
-//        dmsg_err_puts("Alloc OLED context failed.");
+        ESP_LOGE(__func__,"Alloc OLED context failed.");
         goto oled_init_fail;
     }
     if (id == 0)
@@ -165,7 +168,6 @@ bool ssd1306_init(uint8_t id,uint8_t scl_pin, uint8_t sda_pin)
   #elif (PANEL0_TYPE == SSD1306_128x32)
         ctx->type = SSD1306_128x32;
         ctx->buffer = malloc(512);  // 128 * 32 / 8
-//        memset(&(ctx->buffer),0,512);
         ctx->width = 128;
         ctx->height = 32;
   #else
@@ -173,70 +175,31 @@ bool ssd1306_init(uint8_t id,uint8_t scl_pin, uint8_t sda_pin)
   #endif
         if (ctx->buffer == NULL)
         {
-//            dmsg_err_puts("Alloc OLED buffer failed.");
+            ESP_LOGE(__func__,"Alloc OLED buffer failed.");
             goto oled_init_fail;
         }
         ctx->address = PANEL0_ADDR;
-  #if PANEL0_USE_RST
-        // Panel 0 reset
-        PIN_FUNC_SELECT(PANEL0_RST_MUX, PANEL0_RST_FUNC);
-        GPIO_REG_WRITE(GPIO_ENABLE_ADDRESS, GPIO_REG_READ(GPIO_ENABLE_ADDRESS) | PANEL0_RST_BIT);
-        GPIO_REG_WRITE(GPIO_OUT_W1TC_ADDRESS, PANEL0_RST_BIT);
-        os_delay_us(10000);
-        GPIO_REG_WRITE(GPIO_OUT_W1TS_ADDRESS, PANEL0_RST_BIT);
-  #endif
 #else
-        dmsg_err_puts("Panel 0 not defined.");
+        ESP_LOGE(__func__,"Panel 0 not defined.");
         goto oled_init_fail;
 #endif
     }
-    else if (id == 1)
-    {
-#if (PANEL1_PANEL_TYPE != 0)
-  #if (PANEL1_PANEL_TYPE ==SSD1306_128x64)
-        ctx->type = SSD1306_128x64;
-        ctx->buffer = malloc(1024); // 128 * 64 / 8
-//        memset(&(ctx->buffer),0,1024);
-        ctx->width = 128;
-        ctx->height = 64;
-  #elif (PANEL1_PANEL_TYPE == SSD1306_128x32)
-        ctx->type = SSD1306_128x32;
-        ctx->buffer = zalloc(512);  // 128 * 32 / 8
-        ctx->width = 128;
-        ctx->height = 32;
-  #else
-     #error "Unknown Panel 1 type"
-  #endif
-        if (ctx->buffer == NULL)
-        {
-//            dmsg_err_puts("Alloc OLED buffer failed.");
-            goto oled_init_fail;
-        }
-        ctx->address = PANEL1_ADDR;
-  #if PANEL1_USE_RST
-        // Panel 1 reset
-        PIN_FUNC_SELECT(PANEL1_RST_MUX, PANEL1_RST_FUNC);
-        GPIO_REG_WRITE(GPIO_ENABLE_ADDRESS, GPIO_REG_READ(GPIO_ENABLE_ADDRESS) | PANEL1_RST_BIT);
-        GPIO_REG_WRITE(GPIO_OUT_W1TC_ADDRESS, PANEL1_RST_BIT);
-        os_delay_us(10000);
-        GPIO_REG_WRITE(GPIO_OUT_W1TS_ADDRESS, PANEL1_RST_BIT);
-  #endif
-#else
-        dmsg_err_puts("Panel 1 not defined.");
-        goto oled_init_fail;
-#endif
-    }
-
     // Panel initialization
     // Try send I2C address check if the panel is connected
-    i2c_start();
-    if (!i2c_write(ctx->address))
+    cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    if (ESP_OK !=i2c_master_write_byte(cmd, ctx->address, true))
     {
-        i2c_stop();
-//        dmsg_err_puts("OLED I2C bus not responding.");
+        i2c_master_stop(cmd);
+        i2c_master_cmd_begin(I2C_NUM_0, cmd, 100/portTICK_PERIOD_MS);
+        i2c_cmd_link_delete(cmd);
+
+        ESP_LOGE(__func__,"OLED I2C bus not responding.");
         goto oled_init_fail;
     }
-    i2c_stop();
+    i2c_master_stop(cmd);
+    i2c_master_cmd_begin(I2C_NUM_0, cmd, 100/portTICK_PERIOD_MS);
+    i2c_cmd_link_delete(cmd);
 
     // Now we assume all sending will be successful
     if (ctx->type == SSD1306_128x64)
@@ -378,6 +341,7 @@ void ssd1306_refresh(uint8_t id, bool force)
     uint8_t i,j;
     uint16_t k;
     uint8_t page_start, page_end;
+    i2c_cmd_handle_t cmd = NULL;
 
     if (ctx == NULL)
         return;
@@ -394,16 +358,19 @@ void ssd1306_refresh(uint8_t id, bool force)
             _command(ctx->address, 7);    // page end (8 pages for 64 rows OLED)
             for (k = 0; k < 1024; k++)
             {
-                i2c_start();
-                i2c_write(ctx->address);
-                i2c_write(0x40);
+                cmd = i2c_cmd_link_create();
+                i2c_master_start(cmd);
+                i2c_master_write_byte(cmd, ctx->address, true);
+                i2c_master_write_byte(cmd, 0x40, true);
                 for (j = 0; j < 16; ++j)
                 {
-                    i2c_write(ctx->buffer[k]);
+                    i2c_master_write_byte(cmd, ctx->buffer[k], true);
                     ++k;
                 }
                 --k;
-                i2c_stop();
+                i2c_master_stop(cmd);
+                i2c_master_cmd_begin(I2C_NUM_0, cmd, 100/portTICK_PERIOD_MS);
+                i2c_cmd_link_delete(cmd);
             }
         }
         else if (ctx->type == SSD1306_128x32)
@@ -416,21 +383,24 @@ void ssd1306_refresh(uint8_t id, bool force)
             _command(ctx->address, 3);    // page end (4 pages for 32 rows OLED)
             for (k = 0; k < 512; k++)
             {
-                i2c_start();
-                i2c_write(ctx->address);
-                i2c_write(0x40);
+                cmd = i2c_cmd_link_create();
+                i2c_master_start(cmd);
+                i2c_master_write_byte(cmd, ctx->address, true);
+                i2c_master_write_byte(cmd, 0x40, true);
                 for (j = 0; j < 16; ++j)
                 {
-                    i2c_write(ctx->buffer[k]);
+                    i2c_master_write_byte(cmd, ctx->buffer[k], true);
                     ++k;
                 }
                 --k;
-                i2c_stop();
+                i2c_master_stop(cmd);
+                i2c_master_cmd_begin(I2C_NUM_0, cmd, 100/portTICK_PERIOD_MS);
+                i2c_cmd_link_delete(cmd);
             }
         }
     }
     else
-    {
+    {   //todo make this part work with ESP-IDF i2c driver
         if ((ctx->refresh_top <= ctx->refresh_bottom) && (ctx->refresh_left <= ctx->refresh_right))
         {
             page_start = ctx->refresh_top / 8;
