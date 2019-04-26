@@ -25,7 +25,6 @@
 
 #include <driver/i2c.h>
 #include <esp_log.h>
-#include "i2c.h"
 #include "fonts.h"
 #include "stddef.h"
 #include "ssd1306.h"
@@ -80,12 +79,11 @@ void _command(uint8_t adress, uint8_t c)
     bool ret;
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, adress, true);
-//    ret = i2c_write(adress);
-//    if (!ret) // NACK
-//        i2c_stop();
-    i2c_master_write_byte(cmd,0x00, true);    // Co = 0, D/C = 0
-    i2c_master_write_byte(cmd, c, true);
+    ret = i2c_master_write_byte(cmd, adress, true);
+    if(ret == ESP_OK) {
+	    i2c_master_write_byte(cmd, 0x00, true);    // Co = 0, D/C = 0
+	    i2c_master_write_byte(cmd, c, true);
+    }
     i2c_master_stop(cmd);
     i2c_master_cmd_begin(I2C_NUM_0, cmd, 100/portTICK_PERIOD_MS);
     i2c_cmd_link_delete(cmd);
@@ -93,15 +91,19 @@ void _command(uint8_t adress, uint8_t c)
 
 
 void _data(uint8_t adress, uint8_t d)
-{ // todo make this work with ESP-IDF i2c driver
-    bool ret;
-    i2c_start();
-    ret = i2c_write(adress);
-    if (!ret) // NACK
-        i2c_stop();
-    i2c_write(0x40);    // Co = 0, D/C = 1
-    i2c_write(d);
-    i2c_stop();
+{
+	ESP_LOGD(__func__,"%02x",d);
+	bool ret;
+	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+	i2c_master_start(cmd);
+	ret = i2c_master_write_byte(cmd, adress, true);
+	if(ret == ESP_OK) {
+		i2c_master_write_byte(cmd, 0x40, true);    // Co = 0, D/C = 1
+		i2c_master_write_byte(cmd, d, true);
+	}
+	i2c_master_stop(cmd);
+	i2c_master_cmd_begin(I2C_NUM_0, cmd, 100/portTICK_PERIOD_MS);
+	i2c_cmd_link_delete(cmd);
 }
 
 
@@ -400,7 +402,7 @@ void ssd1306_refresh(uint8_t id, bool force)
         }
     }
     else
-    {   //todo make this part work with ESP-IDF i2c driver
+    {
         if ((ctx->refresh_top <= ctx->refresh_bottom) && (ctx->refresh_left <= ctx->refresh_right))
         {
             page_start = ctx->refresh_top / 8;
@@ -418,22 +420,32 @@ void ssd1306_refresh(uint8_t id, bool force)
                 {
                     if (k == 0)
                     {
-                        i2c_start();
-                        i2c_write(ctx->address);
-                        i2c_write(0x40);
+	                    cmd = i2c_cmd_link_create();
+	                    i2c_master_start(cmd);
+                        i2c_master_write_byte(cmd, ctx->address, true);
+	                    i2c_master_write_byte(cmd, 0x40, true);
                     }
-                    i2c_write(ctx->buffer[i * ctx->width + j]);
+	                i2c_master_write_byte(cmd,ctx->buffer[i * ctx->width + j],true);
                     ++k;
                     if (k == 16)
                     {
-                        i2c_stop();
+	                    i2c_master_stop(cmd);
+	                    i2c_master_cmd_begin(I2C_NUM_0, cmd, 100/portTICK_PERIOD_MS);
+	                    i2c_cmd_link_delete(cmd);
                         k = 0;
                     }
 
                 }
             }
             if (k != 0) // for last batch if stop was not sent
-                i2c_stop();
+            {
+            	if(cmd != NULL) // cmd handle not deleted
+	            {
+		            i2c_master_stop(cmd);
+		            i2c_master_cmd_begin(I2C_NUM_0, cmd, 100/portTICK_PERIOD_MS);
+		            i2c_cmd_link_delete(cmd);
+	            }
+            }
         }
     }
     // reset dirty area
